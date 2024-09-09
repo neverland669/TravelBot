@@ -6,6 +6,6 @@ meta:
 build:
   requirementsPath: requirements.txt
 run:
-  command: main.py
+  command: gunicorn --bind 0.0.0.0:80 app:main.py
   persistenceMount: /data
   containerPort: "80"
