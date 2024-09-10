@@ -1,16 +1,27 @@
 import telebot
 from telebot import types
 import urllib.parse
+import requests
+
+import logging
 
 
-bot = telebot.TeleBot('7432985589:AAGeg_zR-ObYroh4EPJ1pEcCO_CFLu0mtgk')
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+YANDEX_MAPS_API_KEY = '6618c8f7-1e96-4990-935b-ea913a9f81f8'
+BOT_TOKEN = '7459376341:AAECUgnT7q-OdoJJKRTDEWTut1x5Y5Qcu0I'
+
+bot = telebot.TeleBot(BOT_TOKEN)
+
 def create_city_keyboard():
     markup = types.ReplyKeyboardMarkup(row_width=1)
     btnMSK = types.KeyboardButton('Москва')
     btnSPB = types.KeyboardButton('Санкт-Петербург')
     btnNSK = types.KeyboardButton('Новосибирск')
     btnSVO = types.KeyboardButton('Свое место')
-    markup.add(btnMSK, btnSPB, btnNSK, btnSVO)
+    btnBLIZ = types.KeyboardButton('Ближайшие места')
+    markup.add(btnMSK, btnSPB, btnNSK, btnSVO, btnBLIZ)
     return markup
 
 def create_type_keyboard():
@@ -21,6 +32,35 @@ def create_type_keyboard():
     btnBACK = types.KeyboardButton('Назад')
     markup.add(btnArch, btnMus, btnAnim, btnBACK)
     return markup
+
+def handle_location(message) -> None:
+    user_location = message.location
+    latitude = user_location.latitude
+    longitude = user_location.longitude
+
+    # Запрос к Google Places API
+    url = f'https://search-maps.yandex.ru/v1/?apikey={YANDEX_MAPS_API_KEY}&text=достопримечательности&lang=ru_RU&ll={longitude},{latitude}&spn=0.1,0.1&type=biz'
+    response = requests.get(url)
+    data = response.json()
+
+    if 'features' in data:
+        attractions = data['features']
+        if attractions:
+            message_t = "Ближайшие достопримечательности:\n"
+            for attraction in attractions[:5]:  # Ограничимся первыми 5 достопримечательностями
+                name = attraction['properties']['name']
+                address = attraction['properties'].get('description', 'Адрес не указан')
+                message_t += f"- {name} ({address})\n"
+        else:
+            message_t = "К сожалению, рядом с вами не найдено достопримечательностей."
+    else:
+        message_t = "Произошла ошибка при поиске достопримечательностей."
+        logger.error(f"Yandex Maps API error: {data.get('message', 'Unknown error')}")
+
+    bot.send_message(message.chat.id, message_t)
+    message.text = 'Список городов'
+    on_click(message)
+
 
 @bot.message_handler(commands=['start', 'main', 'hello'])
 def start(message):
@@ -34,11 +74,12 @@ def start(message):
 
 def on_click(message):
     if message.text == 'Список городов':
-        bot.send_message(message.chat.id, 'Пока что в нашем боте доступны такие города как: Москва, Санкт-Петербург и Новосибирск, а так же поиск своего места', reply_markup=create_city_keyboard())
+        bot.send_message(message.chat.id, 'В нашем боте доступны такие города как: Москва, Санкт-Петербург и Новосибирск, а так же поиск своего места. Что вы выберете?', reply_markup=create_city_keyboard())
         bot.register_next_step_handler(message, citychoose)
     else:
         bot.send_message(message.chat.id, 'Пожалуйста, нажмите на кнопку "Список городов".')
         bot.register_next_step_handler(message, on_click)
+
 def citychoose(message):
     if message.text == 'Москва':
         MSKfile = open('./start_photo.jpg', 'rb')
@@ -46,14 +87,12 @@ def citychoose(message):
         bot.send_message(message.chat.id, 'Какой тип достопримечательностей вас интересует?', reply_markup=create_type_keyboard())
         bot.register_next_step_handler(message, MSK)
     elif message.text == 'Санкт-Петербург':
-        # choose = message.text
         MSKfile = open('./spb.jpg', 'rb')
         bot.send_photo(message.chat.id, MSKfile)
         bot.send_message(message.chat.id, 'В стадии разработки')
         message.text = 'Список городов'
         on_click(message)
     elif message.text == 'Новосибирск':
-        # choose = message.text
         MSKfile = open('./nsk.jpeg', 'rb')
         bot.send_photo(message.chat.id, MSKfile)
         bot.send_message(message.chat.id, 'В стадии разработки')
@@ -62,11 +101,21 @@ def citychoose(message):
     elif message.text == 'Свое место':
         bot.send_message(message.chat.id, 'Введите место, которое вас интересует')
         bot.register_next_step_handler(message, get_custom_place)
+    elif message.text == 'Ближайшие места':
+        bot.send_message(message.chat.id, 'Пришли мне геопозицию', reply_markup=create_city_keyboard())
+        bot.register_next_step_handler(message, handle_location_message)
     else:
         bot.send_message(message.chat.id, "Пожалуйста, используйте кнопки")
         message.text = 'Список городов'
         on_click(message)
 
+def handle_location_message(message):
+    if message.location:
+        handle_location(message)
+    else:
+        bot.send_message(message.chat.id, 'Пожалуйста, отправьте свою геопозицию.')
+        message.text = 'Ближайшие места'
+        citychoose(message)
 
 def get_custom_place(message):
     place_name = message.text
@@ -75,7 +124,6 @@ def get_custom_place(message):
     bot.send_message(message.chat.id, f'Вот ссылка на место: {location_url}')
     message.text = 'Список городов'
     on_click(message)
-
 
 def MSK(message):
     markuptypeMSK = types.ReplyKeyboardMarkup(row_width=1)
@@ -122,7 +170,6 @@ def MSK(message):
         bot.send_message(message.chat.id, "Пожалуйста, используйте кнопки")
         message.text = 'Москва'
         citychoose(message)
-
 
 def MSK_ARCH(message):
     markuptypeMSK = types.ReplyKeyboardMarkup(row_width=1)
