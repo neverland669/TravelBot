@@ -10,7 +10,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 YANDEX_MAPS_API_KEY = '6618c8f7-1e96-4990-935b-ea913a9f81f8'
-BOT_TOKEN = '7459376341:AAECUgnT7q-OdoJJKRTDEWTut1x5Y5Qcu0I'
+BOT_TOKEN = '7432985589:AAGeg_zR-ObYroh4EPJ1pEcCO_CFLu0mtgk'
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
